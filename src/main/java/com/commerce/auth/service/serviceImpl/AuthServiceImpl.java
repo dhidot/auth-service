@@ -7,6 +7,7 @@ Created on 25/07/2026
 Version 1.0
 */
 
+import com.commerce.auth.config.enums.RoleName;
 import com.commerce.auth.dto.request.LoginRequest;
 import com.commerce.auth.dto.request.LogoutRequest;
 import com.commerce.auth.dto.request.RefreshTokenRequest;
@@ -15,10 +16,12 @@ import com.commerce.auth.dto.response.LoginResponse;
 import com.commerce.auth.dto.response.RefreshTokenResponse;
 import com.commerce.auth.dto.response.RegisterResponse;
 import com.commerce.auth.entity.RefreshToken;
+import com.commerce.auth.entity.Role;
 import com.commerce.auth.entity.User;
 import com.commerce.auth.exception.BadRequestException;
 import com.commerce.auth.exception.UnauthorizedException;
 import com.commerce.auth.repository.RefreshTokenRepository;
+import com.commerce.auth.repository.RoleRepository;
 import com.commerce.auth.repository.UserRepository;
 import com.commerce.auth.security.jwt.JwtService;
 import com.commerce.auth.service.AuthService;
@@ -42,6 +45,7 @@ public class AuthServiceImpl implements AuthService {
 
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokenService;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -55,6 +59,14 @@ public class AuthServiceImpl implements AuthService {
         if (userRepository.existsByUsername(request.username())) {
             throw new BadRequestException("Username already registered");
         }
+
+        if (request.role() != RoleName.CUSTOMER &&
+                request.role() != RoleName.SELLER) {
+
+            throw new BadRequestException(
+                    "Only CUSTOMER or SELLER can register"
+            );
+        }
     }
 
     @Override
@@ -64,12 +76,18 @@ public class AuthServiceImpl implements AuthService {
 
         String hashedPassword = passwordEncoder.encode(request.password());
 
+        Role role = roleRepository.findByName(request.role())
+                .orElseThrow(() ->
+                        new BadRequestException("Role not found"));
+
         User user = User.builder()
                 .username(request.username())
                 .email(request.email())
                 .password(hashedPassword)
                 .tokenVersion(0)
                 .build();
+
+        user.getRoles().add(role);
 
         User savedUser = userRepository.save(user);
 
