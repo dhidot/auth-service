@@ -16,6 +16,8 @@ import com.commerce.auth.dto.response.LoginResponse;
 import com.commerce.auth.dto.response.MeResponse;
 import com.commerce.auth.dto.response.RefreshTokenResponse;
 import com.commerce.auth.dto.response.RegisterResponse;
+import com.commerce.auth.entity.User;
+import com.commerce.auth.security.UserPrincipal;
 import com.commerce.auth.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -74,16 +76,19 @@ public class AuthController {
             Authentication authentication
     ) {
 
-        List<String> authorities = authentication
-                .getAuthorities()
-                .stream()
-                .map(GrantedAuthority::getAuthority)
-                .toList();
+        UserPrincipal principal =
+                (UserPrincipal) authentication.getPrincipal();
 
-        MeResponse response = new MeResponse(
-                authentication.getName(),
-                authorities
-        );
+        User user = principal.getUser();
+
+        MeResponse response =
+                new MeResponse(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getEmail(),
+                        principal.getRoles(),
+                        principal.getPermissions()
+                );
 
         return ResponseEntity.ok(
                 ApiResponse.<MeResponse>builder()

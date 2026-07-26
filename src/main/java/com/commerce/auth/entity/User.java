@@ -11,6 +11,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -46,6 +48,23 @@ public class User {
         this.id = UUID.randomUUID();
         this.createdAt = LocalDateTime.now();
     }
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    @Builder.Default
+    private Set<Role> roles = new HashSet<>();
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean enabled = false;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean emailVerified = false;
 
     @PreUpdate
     public void preUpdate() {

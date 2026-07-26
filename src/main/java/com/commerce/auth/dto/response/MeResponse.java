@@ -8,12 +8,16 @@ Version 1.0
 */
 
 import java.util.List;
+import java.util.UUID;
 
 public record MeResponse(
 
+        UUID id,
+        String username,
         String email,
 
-        List<String> authorities
+        List<String> roles,
+        List<String> permissions
 
 ) {
 }

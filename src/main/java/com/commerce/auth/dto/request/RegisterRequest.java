@@ -7,10 +7,8 @@ Created on 25/07/2026
 Version 1.0
 */
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import com.commerce.auth.config.enums.RoleName;
+import jakarta.validation.constraints.*;
 
 public record RegisterRequest(
 
@@ -33,7 +31,9 @@ public record RegisterRequest(
                 regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).*$",
                 message = "Password must contain uppercase, lowercase, and number"
         )
-        String password
+        String password,
 
+        @NotNull(message = "Role is required")
+        RoleName role
 ) {
 }

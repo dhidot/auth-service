@@ -14,6 +14,12 @@ CREATE TABLE refresh_tokens
 
     updated_at TIMESTAMP,
 
+    device_info VARCHAR(255),
+
+    ip_address VARCHAR(50),
+
+    last_used_at TIMESTAMP,
+
     created_by UUID,
 
     updated_by UUID,
