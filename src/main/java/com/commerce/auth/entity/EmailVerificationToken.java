@@ -8,12 +8,18 @@ Version 1.0
 */
 
 import jakarta.persistence.*;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
 @Table(name = "email_verification_tokens")
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class EmailVerificationToken extends BaseEntity {
 
     @Id
@@ -24,7 +30,7 @@ public class EmailVerificationToken extends BaseEntity {
     private UUID token;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
     @Column(nullable = false)
@@ -32,4 +38,15 @@ public class EmailVerificationToken extends BaseEntity {
 
     private LocalDateTime usedAt;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean revoked = false;
+
+    public boolean isExpired() {
+        return expiredAt.isBefore(LocalDateTime.now());
+    }
+
+    public boolean isUsed() {
+        return usedAt != null;
+    }
 }

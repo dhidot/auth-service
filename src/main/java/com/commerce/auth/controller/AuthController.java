@@ -19,6 +19,7 @@ import com.commerce.auth.dto.response.RegisterResponse;
 import com.commerce.auth.entity.User;
 import com.commerce.auth.security.UserPrincipal;
 import com.commerce.auth.service.AuthService;
+import com.commerce.auth.service.EmailVerificationTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -36,6 +38,7 @@ public class AuthController {
 
 
     private final AuthService authService;
+    private final EmailVerificationTokenService emailVerificationService;
 
 
     @PostMapping("/register")
@@ -113,6 +116,21 @@ public class AuthController {
                         .code("200")
                         .message("Token refreshed successfully")
                         .data(response)
+                        .build()
+        );
+    }
+
+    @GetMapping("/verify-email")
+    public ResponseEntity<ApiResponse<Void>> verifyEmail(
+            @RequestParam UUID token
+    ) {
+
+        emailVerificationService.verify(token);
+
+        return ResponseEntity.ok(
+                ApiResponse.<Void>builder()
+                        .code("200")
+                        .message("Email verified successfully")
                         .build()
         );
     }

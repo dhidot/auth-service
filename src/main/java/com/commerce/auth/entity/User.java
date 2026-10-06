@@ -66,6 +66,14 @@ public class User {
     @Builder.Default
     private Boolean emailVerified = false;
 
+    @OneToMany(
+            mappedBy = "user",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    @Builder.Default
+    private Set<EmailVerificationToken> emailVerificationTokens = new HashSet<>();
+
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
