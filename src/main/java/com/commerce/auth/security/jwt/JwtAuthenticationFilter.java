@@ -9,13 +9,19 @@ Version 1.0
 
 import com.commerce.auth.security.CustomUserDetailsService;
 import com.commerce.auth.security.UserPrincipal;
+
+import io.jsonwebtoken.JwtException;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -25,6 +31,8 @@ import java.io.IOException;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
@@ -38,38 +46,60 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String authHeader = request.getHeader("Authorization");
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (authHeader == null
+                || !authHeader.startsWith(BEARER_PREFIX)) {
+
             filterChain.doFilter(request, response);
             return;
         }
 
-        String token = authHeader.substring(7);
+        String token = authHeader.substring(BEARER_PREFIX.length());
 
-        String username = jwtService.extractUsername(token);
+        try {
 
-        if (username != null &&
-                SecurityContextHolder.getContext().getAuthentication() == null) {
+            String username = jwtService.extractUsername(token);
 
-            UserPrincipal userPrincipal =
-                    (UserPrincipal) userDetailsService.loadUserByUsername(username);
+            if (username != null
+                    && SecurityContextHolder.getContext()
+                    .getAuthentication() == null) {
 
-            if (jwtService.isTokenValid(token, userPrincipal.getUser())) {
+                UserPrincipal principal =
+                        (UserPrincipal) userDetailsService
+                                .loadUserByUsername(username);
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userPrincipal,
-                                null,
-                                userPrincipal.getAuthorities()
-                        );
+                boolean accountActive =
+                        principal.getUser().isAccountActive();
 
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request)
-                );
+                if (accountActive
+                        && jwtService.isTokenValid(
+                        token,
+                        principal.getUser()
+                )) {
 
-                SecurityContextHolder.getContext()
-                        .setAuthentication(authentication);
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    principal,
+                                    null,
+                                    principal.getAuthorities()
+                            );
+
+                    authentication.setDetails(
+                            new WebAuthenticationDetailsSource()
+                                    .buildDetails(request)
+                    );
+
+                    SecurityContextHolder.getContext()
+                            .setAuthentication(authentication);
+                }
             }
+
+        } catch (JwtException
+                 | IllegalArgumentException
+                 | UsernameNotFoundException ex) {
+
+            // Invalid, expired, or unknown-user token.
+            // Do not authenticate the request.
+            SecurityContextHolder.clearContext();
         }
 
         filterChain.doFilter(request, response);

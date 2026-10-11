@@ -16,6 +16,7 @@ import com.commerce.auth.service.RefreshTokenService;
 import com.commerce.auth.utils.TokenHasher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -28,39 +29,62 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     private final JwtProperties jwtProperties;
 
 
-    @Override
-    public RefreshToken create(User user, String refreshToken, String deviceInfo, String ipAddress) {
 
-        RefreshToken entity =
-                RefreshToken.builder()
-                        .user(user)
-                        .tokenHash(TokenHasher.sha256(refreshToken))
-                        .expiredAt(LocalDateTime.now().plusSeconds(
-                                jwtProperties.getRefreshTokenExpiration() / 1000
-                        ))
-                        .revoked(false)
-                        .build();
+    @Override
+    public RefreshToken create(
+            User user,
+            String refreshToken,
+            String deviceInfo,
+            String ipAddress
+    ) {
+
+        RefreshToken entity = RefreshToken.builder()
+                .user(user)
+                .tokenHash(TokenHasher.sha256(refreshToken))
+                .expiredAt(
+                        LocalDateTime.now().plusSeconds(
+                                jwtProperties.getRefreshTokenExpiration()
+                                        / 1000
+                        )
+                )
+                .revoked(false)
+                .deviceInfo(deviceInfo)
+                .ipAddress(ipAddress)
+                .build();
 
         return repository.save(entity);
-
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public RefreshToken validate(String refreshToken) {
 
-        String hash = TokenHasher.sha256(refreshToken);
+        String tokenHash =
+                TokenHasher.sha256(refreshToken);
 
-        RefreshToken token =
-                repository.findByTokenHash(hash)
-                        .orElseThrow(() ->
-                                new UnauthorizedException("Refresh token not found"));
+        // Lock database row until outer transaction finishes
+        RefreshToken token = repository
+                .findByTokenHashForUpdate(tokenHash)
+                .orElseThrow(() ->
+                        new UnauthorizedException(
+                                "Invalid refresh token"
+                        )
+                );
 
+        // Reject revoked token
         if (Boolean.TRUE.equals(token.getRevoked())) {
-            throw new UnauthorizedException("Refresh token revoked");
+            throw new UnauthorizedException(
+                    "Invalid refresh token"
+            );
         }
 
-        if (token.getExpiredAt().isBefore(LocalDateTime.now())) {
-            throw new UnauthorizedException("Refresh token expired");
+        // Reject expired token, including exact expiration boundary
+        LocalDateTime now = LocalDateTime.now();
+
+        if (!token.getExpiredAt().isAfter(now)) {
+            throw new UnauthorizedException(
+                    "Invalid refresh token"
+            );
         }
 
         return token;

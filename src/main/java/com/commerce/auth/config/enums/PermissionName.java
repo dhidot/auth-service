@@ -9,26 +9,22 @@ Version 1.0
 
 public enum PermissionName {
 
-    USER_READ,
-    USER_CREATE,
-    USER_UPDATE,
-    USER_DELETE,
+    // User administration
+    ADMIN_USER_READ,
+    ADMIN_USER_UPDATE_STATUS,
 
-    ROLE_READ,
-    ROLE_CREATE,
-    ROLE_UPDATE,
-    ROLE_DELETE,
+    // Session management
+    ADMIN_SESSION_REVOKE,
 
-    PRODUCT_READ,
-    PRODUCT_CREATE,
-    PRODUCT_UPDATE,
-    PRODUCT_DELETE,
+    // System monitoring
+    ADMIN_DASHBOARD_READ,
 
-    ORDER_READ,
-    ORDER_CREATE,
-    ORDER_UPDATE,
-    ORDER_CANCEL,
+    // Audit trail
+    ADMIN_AUDIT_READ,
 
-    PAYMENT_READ,
-    PAYMENT_VERIFY
+    // Role visibility
+    ADMIN_ROLE_READ,
+
+    // Integration monitoring
+    ADMIN_INTEGRATION_LOG_READ
 }

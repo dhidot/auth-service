@@ -8,8 +8,6 @@ Version 1.0
 */
 
 public enum RoleName {
-    SUPER_ADMIN,
-    ADMIN,
-    SELLER,
-    CUSTOMER
+    USER,
+    ADMIN
 }

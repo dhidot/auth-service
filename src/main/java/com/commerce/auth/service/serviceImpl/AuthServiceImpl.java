@@ -7,6 +7,7 @@ Created on 25/07/2026
 Version 1.0
 */
 
+import com.commerce.auth.config.enums.AccountStatus;
 import com.commerce.auth.config.enums.RoleName;
 import com.commerce.auth.dto.request.LoginRequest;
 import com.commerce.auth.dto.request.LogoutRequest;
@@ -19,6 +20,7 @@ import com.commerce.auth.entity.RefreshToken;
 import com.commerce.auth.entity.Role;
 import com.commerce.auth.entity.User;
 import com.commerce.auth.exception.BadRequestException;
+import com.commerce.auth.exception.ConflictException;
 import com.commerce.auth.exception.UnauthorizedException;
 import com.commerce.auth.repository.RefreshTokenRepository;
 import com.commerce.auth.repository.RoleRepository;
@@ -26,8 +28,10 @@ import com.commerce.auth.repository.UserRepository;
 import com.commerce.auth.security.jwt.JwtService;
 import com.commerce.auth.service.AuthService;
 import com.commerce.auth.service.RefreshTokenService;
+import com.commerce.auth.utils.EmailNormalizer;
 import com.commerce.auth.utils.RequestUtils;
 import com.commerce.auth.utils.TokenHasher;
+import io.jsonwebtoken.JwtException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -37,6 +41,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 
 @Service
@@ -51,46 +56,67 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
 
-    private void validateRegisterRequest(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
-            throw new BadRequestException("Email already registered");
+
+    private void validateRegisterRequest(
+            RegisterRequest request,
+            String normalizedEmail
+    ) {
+
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw new ConflictException(
+                    "Email already registered"
+            );
         }
 
         if (userRepository.existsByUsername(request.username())) {
-            throw new BadRequestException("Username already registered");
-        }
-
-        if (request.role() != RoleName.CUSTOMER &&
-                request.role() != RoleName.SELLER) {
-
-            throw new BadRequestException(
-                    "Only CUSTOMER or SELLER can register"
+            throw new ConflictException(
+                    "Username already registered"
             );
         }
     }
 
     @Override
+    @Transactional
     public RegisterResponse register(RegisterRequest request) {
 
-        validateRegisterRequest(request);
+        // 1. Normalisasi email
+        String normalizedEmail =
+                EmailNormalizer.normalize(request.email());
 
-        String hashedPassword = passwordEncoder.encode(request.password());
+        // 2. Validasi duplicate email dan username
+        validateRegisterRequest(request, normalizedEmail);
 
-        Role role = roleRepository.findByName(request.role())
+        // 3. Hash password
+        String hashedPassword =
+                passwordEncoder.encode(request.password());
+
+        // 4. Role ditentukan oleh backend
+        Role role = roleRepository
+                .findByName(RoleName.USER)
                 .orElseThrow(() ->
-                        new BadRequestException("Role not found"));
+                        new IllegalStateException(
+                                "Default USER role is not configured"
+                        )
+                );
 
+        // 5. Build user
         User user = User.builder()
                 .username(request.username())
-                .email(request.email())
+                .email(normalizedEmail)
                 .password(hashedPassword)
                 .tokenVersion(0)
+                .enabled(false)
+                .emailVerified(false)
+                .accountStatus(AccountStatus.PENDING_VERIFICATION)
                 .build();
 
+        // 6. Assign default role
         user.getRoles().add(role);
 
+        // 7. Persist user
         User savedUser = userRepository.save(user);
 
+        // 8. Response
         return new RegisterResponse(
                 savedUser.getId(),
                 savedUser.getUsername(),
@@ -104,13 +130,15 @@ public class AuthServiceImpl implements AuthService {
             HttpServletRequest httpRequest
     ) {
 
+        String normalizedEmail =
+                EmailNormalizer.normalize(request.email());
+
         User user =
-                userRepository.findByEmail(request.email())
+                userRepository.findByEmail(normalizedEmail)
                         .orElseThrow(() ->
                                 new UnauthorizedException(
                                         "Invalid email or password"
                                 ));
-
 
         if (!passwordEncoder.matches(
                 request.password(),
@@ -122,6 +150,11 @@ public class AuthServiceImpl implements AuthService {
             );
         }
 
+        if (!user.isAccountActive()) {
+            throw new UnauthorizedException(
+                    "Invalid email or password"
+            );
+        }
 
         String accessToken =
                 jwtService.generateAccessToken(user);
@@ -155,84 +188,72 @@ public class AuthServiceImpl implements AuthService {
     }
 
 
-    @Transactional
+
     @Override
+    @Transactional
     public RefreshTokenResponse refreshToken(
             RefreshTokenRequest request,
             HttpServletRequest httpRequest
     ) {
 
-        String oldRefreshToken =
-                request.refreshToken();
+        // 1. Ambil refresh token dari request
+        String oldRefreshToken = request.refreshToken();
 
-
-        // 1. Cari refresh token di database
+        // 2. Validasi refresh token pada database
         RefreshToken storedToken =
-                refreshTokenService.validate(
-                        oldRefreshToken
-                );
+                refreshTokenService.validate(oldRefreshToken);
 
+        // 3. Ambil pemilik refresh token
+        User user = storedToken.getUser();
 
-        // 2. Ambil user pemilik token
-        User user =
-                storedToken.getUser();
-
-
-
-        // 3. Validasi JWT refresh token
-        if (!jwtService.isRefreshTokenValid(
-                oldRefreshToken,
-                user
-        )) {
-
+        // 4. Validasi status akun terkini
+        if (!user.isAccountActive()) {
             throw new UnauthorizedException(
                     "Invalid refresh token"
             );
         }
 
+        // 5. Validasi JWT refresh token
+        boolean validRefreshToken;
 
-        // 4. Update last used session lama
-        storedToken.setLastUsedAt(
-                LocalDateTime.now()
-        );
+        try {
+            validRefreshToken = jwtService.isRefreshTokenValid(
+                    oldRefreshToken,
+                    user
+            );
+        } catch (JwtException | IllegalArgumentException ex) {
+            throw new UnauthorizedException(
+                    "Invalid refresh token"
+            );
+        }
 
+        if (!validRefreshToken) {
+            throw new UnauthorizedException(
+                    "Invalid refresh token"
+            );
+        }
 
+        // 6. Catat penggunaan refresh token lama
+        storedToken.setLastUsedAt(LocalDateTime.now());
 
-        // 5. Revoke refresh token lama
-        refreshTokenService.revoke(
-                storedToken
-        );
+        // 7. Revoke token lama
+        refreshTokenService.revoke(storedToken);
 
-
-
-        // 6. Generate token baru
-
+        // 8. Generate access dan refresh token baru
         String newAccessToken =
                 jwtService.generateAccessToken(user);
-
 
         String newRefreshToken =
                 jwtService.generateRefreshToken(user);
 
-
-
-        // 7. Ambil device info terbaru
-
+        // 9. Ambil informasi request
         String deviceInfo =
-                RequestUtils.getDeviceInfo(
-                        httpRequest
-                );
-
+                RequestUtils.getDeviceInfo(httpRequest);
 
         String ipAddress =
-                RequestUtils.getClientIp(
-                        httpRequest
-                );
+                RequestUtils.getClientIp(httpRequest);
 
-
-
-        // 8. Simpan refresh token baru
-
+        // 10. Simpan refresh token baru
         refreshTokenService.create(
                 user,
                 newRefreshToken,
@@ -240,13 +261,14 @@ public class AuthServiceImpl implements AuthService {
                 ipAddress
         );
 
-
-
+        // 11. Response
         return new RefreshTokenResponse(
                 newAccessToken,
                 newRefreshToken
         );
     }
+
+
 
     @Override
     @Transactional
@@ -255,20 +277,22 @@ public class AuthServiceImpl implements AuthService {
             LogoutRequest request
     ) {
 
+        String username = authentication.getName();
 
-        String username =
-                authentication.getName();
+        String tokenHash =
+                TokenHasher.sha256(request.refreshToken());
 
-        String hash = TokenHasher.sha256(request.refreshToken());
+        // 1. Cari refresh token
+        RefreshToken storedToken = refreshTokenRepository
+                .findByTokenHash(tokenHash)
+                .orElseThrow(() ->
+                        new UnauthorizedException(
+                                "Invalid refresh token"
+                        )
+                );
 
-        Optional<RefreshToken> refreshToken =
-                refreshTokenRepository
-                        .findByTokenHash(
-                                hash
-                        );
-
-
-        if (!refreshToken.get().getUser()
+        // 2. Pastikan token milik user yang sedang login
+        if (!storedToken.getUser()
                 .getUsername()
                 .equals(username)) {
 
@@ -277,11 +301,40 @@ public class AuthServiceImpl implements AuthService {
             );
         }
 
-
-        refreshTokenService.revoke(
-                refreshToken.orElse(null)
-        );
-
+        // 3. Revoke refresh token
+        refreshTokenService.revoke(storedToken);
     }
+
+
+    @Override
+    @Transactional
+    public void logoutAll(Authentication authentication) {
+
+        // 1. Identify authenticated user
+        String username = authentication.getName();
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() ->
+                        new UnauthorizedException(
+                                "User not found"
+                        )
+                );
+
+        UUID userId = user.getId();
+
+        // 2. Invalidate all previously issued JWTs
+        int updatedRows =
+                userRepository.incrementTokenVersion(userId);
+
+        if (updatedRows != 1) {
+            throw new IllegalStateException(
+                    "Failed to invalidate user sessions"
+            );
+        }
+
+        // 3. Revoke persisted refresh tokens
+        refreshTokenRepository.revokeAllActiveByUserId(userId);
+    }
+
 
 }

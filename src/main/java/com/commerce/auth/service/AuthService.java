@@ -26,4 +26,5 @@ public interface AuthService {
             Authentication authentication,
             LogoutRequest request
     );
+    void logoutAll(Authentication authentication);
 }

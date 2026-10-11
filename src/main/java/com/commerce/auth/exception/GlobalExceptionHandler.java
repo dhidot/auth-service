@@ -8,6 +8,7 @@ Version 1.0
 */
 
 import com.commerce.auth.common.ApiResponse;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -74,6 +75,70 @@ public class GlobalExceptionHandler {
                         .data(null)
                         .build()
         );
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConflict(
+            ConflictException ex
+    ) {
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(
+                        ApiResponse.<Void>builder()
+                                .code("409")
+                                .message(ex.getMessage())
+                                .build()
+                );
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex
+    ) {
+
+        String constraintName = null;
+
+        Throwable cause = ex;
+
+        while (cause != null) {
+
+            if (cause instanceof
+                    org.hibernate.exception.ConstraintViolationException
+                            constraintException) {
+
+                constraintName = constraintException.getConstraintName();
+                break;
+            }
+
+            cause = cause.getCause();
+        }
+
+        String message;
+
+        if ("users_email_key".equals(constraintName)) {
+
+            message = "Email already registered";
+
+        } else if ("users_username_key".equals(constraintName)) {
+
+            message = "Username already registered";
+
+        } else {
+
+            // Bukan constraint yang sudah kita kenali.
+            // Jangan ubah semua database error menjadi 409.
+            throw ex;
+        }
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(
+                        ApiResponse.<Void>builder()
+                                .code("409")
+                                .message(message)
+                                .build()
+                );
     }
 
 }
