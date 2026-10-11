@@ -7,6 +7,7 @@ Created on 25/07/2026
 Version 1.0
 */
 
+import com.commerce.auth.config.enums.AccountStatus;
 import com.commerce.auth.entity.Permission;
 import com.commerce.auth.entity.Role;
 import com.commerce.auth.entity.User;
@@ -73,16 +74,16 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return true;
-    }
-
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
+        return user.getAccountStatus() != AccountStatus.SUSPENDED;
     }
 
     @Override
     public boolean isEnabled() {
+        return user.isAccountActive();
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
         return true;
     }
 

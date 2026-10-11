@@ -9,137 +9,114 @@ Version 1.0
 
 import com.commerce.auth.config.JwtProperties;
 import com.commerce.auth.entity.User;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.Objects;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class JwtServiceImpl implements JwtService {
 
+    private static final String ACCESS = "ACCESS";
+    private static final String REFRESH = "REFRESH";
+
     private final JwtProperties jwtProperties;
 
-
     private SecretKey getSigningKey() {
-
         return Keys.hmacShaKeyFor(
                 jwtProperties.getSecret()
                         .getBytes(StandardCharsets.UTF_8)
         );
-
     }
 
+    private String generateToken(
+            User user,
+            String type,
+            long expirationMillis
+    ) {
+
+        Date now = new Date();
+
+        Date expiration = new Date(
+                now.getTime() + expirationMillis
+        );
+
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(user.getUsername())
+                .claim("type", type)
+                .claim("tokenVersion", user.getTokenVersion())
+                .issuedAt(now)
+                .expiration(expiration)
+                .signWith(getSigningKey())
+                .compact();
+    }
 
     @Override
     public String generateAccessToken(User user) {
-
-        Date now = new Date();
-
-        Date expired = new Date(
-                now.getTime()
-                        +
-                        jwtProperties.getAccessTokenExpiration()
+        return generateToken(
+                user,
+                ACCESS,
+                jwtProperties.getAccessTokenExpiration()
         );
-
-
-        return Jwts.builder()
-
-                // siapa usernya
-                .subject(user.getUsername())
-
-
-                // untuk revoke semua device
-                .claim(
-                        "tokenVersion",
-                        user.getTokenVersion()
-                )
-
-
-                // membedakan token
-                .claim(
-                        "type",
-                        "ACCESS"
-                )
-
-
-                .issuedAt(now)
-
-                .expiration(expired)
-
-                .signWith(getSigningKey())
-
-                .compact();
     }
-
-
 
     @Override
     public String generateRefreshToken(User user) {
-
-        Date now = new Date();
-
-        Date expired = new Date(
-                now.getTime()
-                        +
-                        jwtProperties.getRefreshTokenExpiration()
+        return generateToken(
+                user,
+                REFRESH,
+                jwtProperties.getRefreshTokenExpiration()
         );
-
-
-        return Jwts.builder()
-
-                .subject(user.getUsername())
-
-
-                .claim(
-                        "type",
-                        "REFRESH"
-                )
-
-
-                .issuedAt(now)
-
-                .expiration(expired)
-
-                .signWith(getSigningKey())
-
-                .compact();
-
     }
-
-
 
     @Override
     public String extractUsername(String token) {
-
-        return extractAllClaims(token)
-                .getSubject();
-
+        return extractAllClaims(token).getSubject();
     }
-
-
 
     @Override
     public Claims extractAllClaims(String token) {
-
         return Jwts.parser()
-
                 .verifyWith(getSigningKey())
-
                 .build()
-
                 .parseSignedClaims(token)
-
                 .getPayload();
-
     }
 
+    private boolean hasValidCommonClaims(
+            Claims claims,
+            User user
+    ) {
 
+        if (user == null || !user.isAccountActive()) {
+            return false;
+        }
+
+        Integer tokenVersion =
+                claims.get("tokenVersion", Integer.class);
+
+        return Objects.equals(
+                claims.getSubject(),
+                user.getUsername()
+        )
+                && tokenVersion != null
+                && tokenVersion.equals(user.getTokenVersion())
+                && claims.getExpiration() != null
+                && claims.getId() != null
+                && !claims.getId().isBlank();
+    }
 
     @Override
     public boolean isTokenValid(
@@ -147,50 +124,12 @@ public class JwtServiceImpl implements JwtService {
             User user
     ) {
 
-        Claims claims =
-                extractAllClaims(token);
+        Claims claims = extractAllClaims(token);
 
-
-        String username =
-                claims.getSubject();
-
-
-        String type =
-                claims.get(
-                        "type",
-                        String.class
-                );
-
-
-        Integer tokenVersion =
-                claims.get(
-                        "tokenVersion",
-                        Integer.class
-                );
-
-
-        return username.equals(user.getUsername())
-
-                && "ACCESS".equals(type)
-
-                && tokenVersion != null
-
-                && tokenVersion.equals(
-                user.getTokenVersion()
+        return ACCESS.equals(
+                claims.get("type", String.class)
         )
-
-                && !isTokenExpired(token);
-
-    }
-
-
-
-    private boolean isTokenExpired(String token) {
-
-        return extractAllClaims(token)
-                .getExpiration()
-                .before(new Date());
-
+                && hasValidCommonClaims(claims, user);
     }
 
     @Override
@@ -199,27 +138,11 @@ public class JwtServiceImpl implements JwtService {
             User user
     ) {
 
-        Claims claims =
-                extractAllClaims(token);
+        Claims claims = extractAllClaims(token);
 
-
-        String username =
-                claims.getSubject();
-
-
-        String type =
-                claims.get(
-                        "type",
-                        String.class
-                );
-
-
-        return username.equals(user.getUsername())
-
-                && "REFRESH".equals(type)
-
-                && !isTokenExpired(token);
-
+        return REFRESH.equals(
+                claims.get("type", String.class)
+        )
+                && hasValidCommonClaims(claims, user);
     }
-
 }

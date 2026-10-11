@@ -7,6 +7,7 @@ Created on 25/07/2026
 Version 1.0
 */
 
+import com.commerce.auth.config.enums.AccountStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -41,12 +42,19 @@ public class User {
     private LocalDateTime updatedAt;
 
     @Column(nullable = false)
+    @Builder.Default
     private Integer tokenVersion = 0;
 
     @PrePersist
     public void prePersist() {
-        this.id = UUID.randomUUID();
-        this.createdAt = LocalDateTime.now();
+
+        if (this.id == null) {
+            this.id = UUID.randomUUID();
+        }
+
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
+        }
     }
 
     @ManyToMany(fetch = FetchType.EAGER)
@@ -66,8 +74,24 @@ public class User {
     @Builder.Default
     private Boolean emailVerified = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(
+            name = "account_status",
+            nullable = false,
+            length = 32
+    )
+    @Builder.Default
+    private AccountStatus accountStatus =
+            AccountStatus.PENDING_VERIFICATION;
+
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public boolean isAccountActive() {
+        return accountStatus == AccountStatus.ACTIVE
+                && Boolean.TRUE.equals(enabled)
+                && Boolean.TRUE.equals(emailVerified);
     }
 }

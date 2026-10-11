@@ -8,10 +8,7 @@ Version 1.0
 */
 
 import com.commerce.auth.common.ApiResponse;
-import com.commerce.auth.dto.request.LoginRequest;
-import com.commerce.auth.dto.request.LogoutRequest;
-import com.commerce.auth.dto.request.RefreshTokenRequest;
-import com.commerce.auth.dto.request.RegisterRequest;
+import com.commerce.auth.dto.request.*;
 import com.commerce.auth.dto.response.LoginResponse;
 import com.commerce.auth.dto.response.MeResponse;
 import com.commerce.auth.dto.response.RefreshTokenResponse;
@@ -19,9 +16,11 @@ import com.commerce.auth.dto.response.RegisterResponse;
 import com.commerce.auth.entity.User;
 import com.commerce.auth.security.UserPrincipal;
 import com.commerce.auth.service.AuthService;
+import com.commerce.auth.service.EmailVerificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -36,6 +35,7 @@ public class AuthController {
 
 
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
 
 
     @PostMapping("/register")
@@ -45,11 +45,28 @@ public class AuthController {
 
         RegisterResponse response = authService.register(request);
 
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(
+                        ApiResponse.<RegisterResponse>builder()
+                                .code("201")
+                                .message("Registration successful")
+                                .data(response)
+                                .build()
+                );
+    }
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<ApiResponse<Void>> verifyEmail(
+            @Valid @RequestBody VerifyEmailRequest request
+    ) {
+
+        emailVerificationService.verifyEmail(request.token());
+
         return ResponseEntity.ok(
-                ApiResponse.<RegisterResponse>builder()
+                ApiResponse.<Void>builder()
                         .code("200")
-                        .message("Register success")
-                        .data(response)
+                        .message("Email verified successfully")
                         .build()
         );
     }
@@ -133,6 +150,21 @@ public class AuthController {
                 ApiResponse.<Void>builder()
                         .code("200")
                         .message("Logout successfully")
+                        .build()
+        );
+    }
+
+    @PostMapping("/logout-all")
+    public ResponseEntity<ApiResponse<Void>> logoutAll(
+            Authentication authentication
+    ) {
+
+        authService.logoutAll(authentication);
+
+        return ResponseEntity.ok(
+                ApiResponse.<Void>builder()
+                        .code("200")
+                        .message("All sessions revoked successfully")
                         .build()
         );
     }

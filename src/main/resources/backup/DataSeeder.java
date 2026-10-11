@@ -1,4 +1,4 @@
-package com.commerce.auth.config;
+package backup;
 
 /*
 @Author Didot
@@ -22,7 +22,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -44,8 +43,6 @@ public class DataSeeder {
             seedRoles();
 
             seedPermissions();
-
-            seedRolePermissions();
 
             seedAdmin();
 
@@ -120,40 +117,40 @@ public class DataSeeder {
         roleRepository.save(role);
     }
 
-    private void seedRolePermissions() {
-
-        Role superAdmin = getRole(RoleName.SUPER_ADMIN);
-
-        superAdmin.setPermissions(
-                new HashSet<>(permissionRepository.findAll())
-        );
-
-        roleRepository.save(superAdmin);
-
-        assignPermissions(
-                RoleName.ADMIN,
-                PermissionName.USER_READ,
-                PermissionName.USER_UPDATE,
-                PermissionName.ROLE_READ,
-                PermissionName.ORDER_READ,
-                PermissionName.ORDER_UPDATE,
-                PermissionName.PAYMENT_VERIFY
-        );
-
-        assignPermissions(
-                RoleName.SELLER,
-                PermissionName.PRODUCT_CREATE,
-                PermissionName.PRODUCT_UPDATE,
-                PermissionName.ORDER_READ
-        );
-
-        assignPermissions(
-                RoleName.CUSTOMER,
-                PermissionName.ORDER_CREATE,
-                PermissionName.ORDER_CANCEL
-        );
-
-    }
+//    private void seedRolePermissions() {
+//
+//        Role superAdmin = getRole(RoleName.SUPER_ADMIN);
+//
+//        superAdmin.setPermissions(
+//                new HashSet<>(permissionRepository.findAll())
+//        );
+//
+//        roleRepository.save(superAdmin);
+//
+//        assignPermissions(
+//                RoleName.ADMIN,
+//                PermissionName.USER_READ,
+//                PermissionName.USER_UPDATE,
+//                PermissionName.ROLE_READ,
+//                PermissionName.ORDER_READ,
+//                PermissionName.ORDER_UPDATE,
+//                PermissionName.PAYMENT_VERIFY
+//        );
+//
+//        assignPermissions(
+//                RoleName.SELLER,
+//                PermissionName.PRODUCT_CREATE,
+//                PermissionName.PRODUCT_UPDATE,
+//                PermissionName.ORDER_READ
+//        );
+//
+//        assignPermissions(
+//                RoleName.CUSTOMER,
+//                PermissionName.ORDER_CREATE,
+//                PermissionName.ORDER_CANCEL
+//        );
+//
+//    }
 
     private void seedAdmin() {
 
@@ -164,7 +161,7 @@ public class DataSeeder {
         }
 
         Role superAdmin =
-                getRole(RoleName.SUPER_ADMIN);
+                getRole(RoleName.ADMIN);
 
         User admin =
                 User.builder()
