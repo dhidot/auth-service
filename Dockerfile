@@ -16,6 +16,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     && cp target/auth-service-*.jar /build/app.jar
 
 FROM eclipse-temurin:21-jre-noble AS runtime
+LABEL org.opencontainers.image.title="CareerTrack Auth Service"
 WORKDIR /app
 
 RUN groupadd --gid 10001 app \
