@@ -1,0 +1,16 @@
+**
+!pom.xml
+!mvnw
+!.mvn/
+!.mvn/**
+!src/
+!src/main/
+!src/main/**
+
+**/.DS_Store
+**/*.zip
+**/.env*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks

@@ -1,0 +1,105 @@
+name: Auth Service CI and Image
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - chore/docker-auth-service
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_DB: auth_db
+          POSTGRES_USER: ci_user
+          # Database sementara, hanya untuk runner pengujian.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d auth_db"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      DB_URL: jdbc:postgresql://localhost:5432/auth_db
+      DB_USERNAME: ci_user
+      DB_PASSWORD: ""
+      ADMIN_USERNAME: ci_admin
+      ADMIN_EMAIL: ci-admin@example.test
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Generate temporary test secrets
+        shell: bash
+        run: |
+          jwt_secret="$(openssl rand -hex 32)"
+          admin_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$jwt_secret"
+          echo "::add-mask::$admin_password"
+          echo "JWT_SECRET=$jwt_secret" >> "$GITHUB_ENV"
+          echo "ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+
+      - name: Run automated tests
+        run: bash ./mvnw -B -ntp clean verify
+
+  publish:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish AMD64 image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/dhidot/auth-service:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/dhidot/auth-service
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
