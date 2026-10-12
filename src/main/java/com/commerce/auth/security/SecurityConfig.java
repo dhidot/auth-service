@@ -70,6 +70,12 @@ public class SecurityConfig {
 
                         .requestMatchers("/api/career/**")
                         .hasRole("USER")
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/actuator/health",
+                                "/actuator/health/liveness",
+                                "/actuator/health/readiness"
+                        ).permitAll()
 
                         .anyRequest()
                         .authenticated()
