@@ -133,6 +133,25 @@ class RegistrationIntegrationTest {
         assertEquals(email, savedUser.getEmail());
     }
 
+    @Test
+    void register_whenValid_shouldPersistOnlyHashedVerificationToken()
+            throws Exception {
+
+        String username = uniqueUsername();
+        User saved = registerAndFindUser(username, emailFor(username));
+
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM email_verification_tokens WHERE user_id = ?",
+                Integer.class, saved.getId());
+        assertEquals(1, count);
+
+        String storedHash = jdbcTemplate.queryForObject(
+                "SELECT token_hash FROM email_verification_tokens WHERE user_id = ?",
+                String.class, saved.getId());
+        assertNotNull(storedHash);
+        assertTrue(storedHash.matches("^[a-f0-9]{64}$"));
+    }
+
     // TEST 2: Registration assigns USER role
 
     @Test
