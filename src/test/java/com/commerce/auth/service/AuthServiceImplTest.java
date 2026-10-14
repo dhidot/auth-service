@@ -22,6 +22,8 @@ import com.commerce.auth.repository.RefreshTokenRepository;
 import com.commerce.auth.repository.RoleRepository;
 import com.commerce.auth.repository.UserRepository;
 import com.commerce.auth.security.jwt.JwtService;
+import com.commerce.auth.notification.VerificationEmailRequested;
+import org.springframework.context.ApplicationEventPublisher;
 import com.commerce.auth.service.serviceImpl.AuthServiceImpl;
 import com.commerce.auth.exception.ConflictException;
 
@@ -74,6 +76,12 @@ class AuthServiceImplTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private EmailVerificationService emailVerificationService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -142,6 +150,48 @@ class AuthServiceImplTest {
 
         verify(userRepository, times(1))
                 .save(any(User.class));
+    }
+
+    @Test
+    void register_whenValid_shouldCreateVerificationTokenAfterSavingUser() {
+        mockSuccessfulRegistration();
+
+        authService.register(validRequest);
+
+        InOrder order = inOrder(userRepository, emailVerificationService);
+        order.verify(userRepository).save(any(User.class));
+        // Auth Service must use the persisted entity returned by repository.save.
+        order.verify(emailVerificationService).createVerificationToken(argThat(
+                user -> USER_ID.equals(user.getId())
+                        && EMAIL.equals(user.getEmail())
+        ));
+    }
+
+    @Test
+    void register_whenValid_shouldPublishVerificationEventWithToken() {
+        mockSuccessfulRegistration();
+        when(emailVerificationService.createVerificationToken(any(User.class)))
+                .thenReturn("test-raw-verification-token");
+
+        authService.register(validRequest);
+
+        ArgumentCaptor<VerificationEmailRequested> eventCaptor =
+                ArgumentCaptor.forClass(VerificationEmailRequested.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertEquals(USER_ID, eventCaptor.getValue().userId());
+        assertEquals(EMAIL, eventCaptor.getValue().email());
+        assertEquals("test-raw-verification-token", eventCaptor.getValue().rawToken());
+    }
+
+    @Test
+    void register_whenDuplicateEmail_shouldNotCreateVerificationToken() {
+        when(userRepository.existsByEmail(EMAIL)).thenReturn(true);
+
+        assertThrows(ConflictException.class,
+                () -> authService.register(validRequest));
+
+        verifyNoInteractions(emailVerificationService);
+        verifyNoInteractions(eventPublisher);
     }
 
     // ==========================================================

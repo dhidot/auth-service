@@ -22,11 +22,14 @@ import com.commerce.auth.entity.User;
 import com.commerce.auth.exception.BadRequestException;
 import com.commerce.auth.exception.ConflictException;
 import com.commerce.auth.exception.UnauthorizedException;
+import com.commerce.auth.notification.VerificationEmailRequested;
+import org.springframework.context.ApplicationEventPublisher;
 import com.commerce.auth.repository.RefreshTokenRepository;
 import com.commerce.auth.repository.RoleRepository;
 import com.commerce.auth.repository.UserRepository;
 import com.commerce.auth.security.jwt.JwtService;
 import com.commerce.auth.service.AuthService;
+import com.commerce.auth.service.EmailVerificationService;
 import com.commerce.auth.service.RefreshTokenService;
 import com.commerce.auth.utils.EmailNormalizer;
 import com.commerce.auth.utils.RequestUtils;
@@ -55,6 +58,8 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenService refreshTokenService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
+    private final EmailVerificationService emailVerificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
 
     private void validateRegisterRequest(
@@ -115,6 +120,14 @@ public class AuthServiceImpl implements AuthService {
 
         // 7. Persist user
         User savedUser = userRepository.save(user);
+
+        // Create the raw verification token and persist its hash in this
+        // registration transaction. Only Auth Service owns this token.
+        // The delivery step will be wired after the DB transaction commits.
+        String rawVerificationToken = emailVerificationService.createVerificationToken(savedUser);
+        // The event is consumed only AFTER_COMMIT. Never publish the raw token to logs.
+        eventPublisher.publishEvent(new VerificationEmailRequested(
+                savedUser.getId(), savedUser.getEmail(), savedUser.getUsername(), rawVerificationToken));
 
         // 8. Response
         return new RegisterResponse(
