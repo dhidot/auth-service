@@ -65,7 +65,7 @@ Kalau keputusan ini salah, akibatnya sulit diperbaiki belakangan: data lamaran t
    - **Per user** (logout-all, akun disuspend, ganti password): "semua token milik `sub` yang `iat`-nya sebelum `T` tidak berlaku".
    - **Per sesi** (logout biasa): "token dengan `sid` = S tidak berlaku". Setiap access token membawa claim baru `sid`, yaitu ID sesi yang sama dengan refresh token pasangannya.
    - Setiap catatan punya `expires_at` = waktu pencabutan + 15 menit (umur access token). Setelah itu semua token yang terkena pasti sudah kadaluarsa sendiri, jadi catatannya boleh dihapus. **Daftarnya selalu kecil.**
-2. **Auth menyediakan endpoint internal** `GET /internal/revocations?since=<cursor>`, dilindungi `X-Internal-Api-Key` seperti pola Notification Service. Endpoint ini **tidak** dirutekan oleh Caddy maupun gateway.
+2. **Auth menyediakan endpoint internal** `GET /internal/revocations`, dilindungi `X-Internal-Api-Key` (`REVOCATIONS_INTERNAL_API_KEY`) seperti pola Notification Service. Endpoint ini **tidak** dirutekan oleh Caddy maupun gateway. Isinya selalu **daftar lengkap yang masih aktif**, bukan "perubahan sejak cursor": ID dari sequence database bisa commit tidak berurutan, sehingga cursor bisa melewatkan satu catatan untuk selamanya. Karena setiap catatan hanya hidup ±16 menit, daftarnya selalu kecil.
 3. **Gateway mengambil daftar itu setiap ±5 detik** dan menyimpannya di memori. Setiap request ke route yang butuh login dicek terhadap daftar ini, setelah tanda tangan dan claim token valid. Kalau cocok, gateway membalas 401.
 4. **Endpoint milik Auth tetap memeriksa `tokenVersion` dan status akun di DB** pada setiap request (instan, seperti sekarang).
 
@@ -129,7 +129,7 @@ Refresh token memakai format yang sama (`type: REFRESH`, `aud` sama), tetapi **h
 | **A. Auth: terbitkan token baru** | Auth menerbitkan token RS256 dengan `kid`, `iss`, `aud`, `sub` = UUID, dan `username`. Endpoint JWKS tersedia. Auth **masih menerima** token HS256 lama untuk diperiksa. | Validasi saat startup seperti `JWT_SECRET`: private key wajib ada, RSA ≥ 2048 bit |
 | **B. Auth: terima dua bentuk `sub`** | Kalau `sub` berupa UUID, user dicari lewat id. Kalau bukan, dicari lewat username (token lama). | 12 tempat yang memakai `authentication.getName()` disesuaikan |
 | **C. Masa transisi 7 hari** | Umur refresh token lama paling lama 7 hari. Setiap kali user me-refresh, ia mendapat token baru. | Tidak ada yang dipaksa login ulang |
-| **C2. Auth: pencatatan pencabutan** | Tabel `token_revocations` (Flyway), claim `sid`, logout dan logout-all menulis catatan, endpoint internal `GET /internal/revocations`, dan pembersihan catatan yang sudah kadaluarsa | Token lama tanpa `sid` hanya bisa dicabut per user. Setelah masa transisi, semua token punya `sid`. |
+| **C2. Auth: pencatatan pencabutan** | Tabel `token_revocations` (Flyway V15), logout dan logout-all menulis catatan, filter Auth sendiri langsung menolak sesi yang dicabut, endpoint internal `GET /internal/revocations` (snapshot), dan pembersihan otomatis catatan kadaluarsa setiap 10 menit | Token lama tanpa `sid` hanya bisa dicabut per user. Setelah masa transisi, semua token punya `sid`. |
 | **D. Bersihkan** | Setelah 7 hari: hapus jalur HS256 dan pencarian lewat username, lalu `JWT_SECRET` tidak dipakai lagi | Catat tanggal mulai tahap A |
 | **E. Gateway** | Pemeriksaan JWT untuk route non-auth (resource server reaktif, `jwk-set-uri` internal, validator `iss`/`aud`/`type`) **plus** polling daftar pencabutan setiap ±5 detik | Dikerjakan bersama route Application Service pertama |
 | **F. Application Service** | Pemeriksaan yang sama, dan `owner_user_id` diambil dari `sub` | Bagian dari P5 |
@@ -186,4 +186,6 @@ Frontend (BFF) **tidak berubah**: BFF tidak membaca isi token, hanya menyimpanny
 | Tanggal | Perubahan |
 |---|---|
 | 27 Nov 2026 | Keputusan 1–4 diterima |
+| 27 Nov 2026 | Tahap A+B live di production (PR #14) |
+| 27 Nov 2026 | Tahap C2: endpoint internal memakai **snapshot** daftar aktif, bukan cursor (cursor bisa melewatkan catatan karena commit yang tidak berurutan). Auth juga langsung menolak sesi yang dicabut di endpoint miliknya sendiri. |
 | 27 Nov 2026 | **Keputusan 3 direvisi:** dari "jeda revocation maksimal 15 menit" menjadi "daftar pencabutan di gateway (≤ 5 detik)". Alasannya: logout harus langsung memutus akses ke semua service, termasuk untuk token yang sudah dicuri. Ditambahkan claim `sid` dan tahap migrasi C2. |

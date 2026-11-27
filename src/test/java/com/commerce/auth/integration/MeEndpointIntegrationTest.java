@@ -608,6 +608,13 @@ class MeEndpointIntegrationTest {
     }
 
     @Test
+    void internalRevocationsEndpointIsDisabledWithoutAKey() throws Exception {
+        // This context configures no REVOCATIONS_INTERNAL_API_KEY.
+        mockMvc.perform(get("/internal/revocations").header("X-Internal-Api-Key", "anything"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void legacyHs256TokenStillWorksDuringTransition() throws Exception {
         User user = createUser(RoleName.USER);
 

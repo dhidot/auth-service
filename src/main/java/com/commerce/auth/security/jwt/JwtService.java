@@ -36,6 +36,9 @@ public interface JwtService {
      */
     String extractSubject(String token);
 
+    /** The verified {@code sid}, absent for tokens issued before ADR 0001. */
+    java.util.Optional<UUID> extractSessionId(String token);
+
     /** Verified claims; throws {@link io.jsonwebtoken.JwtException} if invalid. */
     Claims extractAllClaims(String token);
 

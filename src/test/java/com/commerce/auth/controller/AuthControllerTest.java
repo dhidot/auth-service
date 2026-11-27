@@ -12,6 +12,7 @@ import com.commerce.auth.security.jwt.JwtService;
 import com.commerce.auth.service.AuthService;
 
 import com.commerce.auth.service.EmailVerificationService;
+import com.commerce.auth.service.TokenRevocationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -63,6 +64,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private EmailVerificationService emailVerificationService;
+
+    @MockitoBean
+    private TokenRevocationService tokenRevocationService;
 
     // ==========================================================
     // HELPER METHODS

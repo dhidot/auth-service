@@ -9,6 +9,7 @@ Version 1.0
 
 import com.commerce.auth.security.CustomUserDetailsService;
 import com.commerce.auth.security.UserPrincipal;
+import com.commerce.auth.service.TokenRevocationService;
 
 import io.jsonwebtoken.JwtException;
 
@@ -36,6 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
+    private final TokenRevocationService tokenRevocationService;
 
     @Override
     protected void doFilterInternal(
@@ -70,10 +72,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 boolean accountActive =
                         principal.getUser().isAccountActive();
 
+                // Logout of this session (ADR 0001, stage C2) applies
+                // immediately, also for a copied access token.
                 if (accountActive
                         && jwtService.isTokenValid(
                         token,
                         principal.getUser()
+                )
+                        && !tokenRevocationService.isSessionRevoked(
+                        jwtService.extractSessionId(token).orElse(null)
                 )) {
 
                     UsernamePasswordAuthenticationToken authentication =

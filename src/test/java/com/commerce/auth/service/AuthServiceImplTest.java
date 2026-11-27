@@ -83,6 +83,9 @@ class AuthServiceImplTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private TokenRevocationService tokenRevocationService;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -726,6 +729,7 @@ class AuthServiceImplTest {
         );
 
         verify(refreshTokenService, never()).revoke(any());
+        verifyNoInteractions(tokenRevocationService);
     }
 
 
@@ -740,13 +744,18 @@ class AuthServiceImplTest {
 
         when(authentication.getName()).thenReturn("dhito");
 
+        UUID ownerId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
         User owner = User.builder()
+                .id(ownerId)
                 .username("dhito")
                 .build();
 
         RefreshToken storedToken = mock(RefreshToken.class);
 
         when(storedToken.getUser()).thenReturn(owner);
+        when(storedToken.getSessionId()).thenReturn(sessionId);
 
         when(refreshTokenRepository.findByTokenHash(
                 TokenHasher.sha256(rawToken)
@@ -758,6 +767,9 @@ class AuthServiceImplTest {
         );
 
         verify(refreshTokenService).revoke(storedToken);
+        // Access tokens of this session are revoked everywhere (ADR 0001 C2)
+        verify(tokenRevocationService).revokeSession(ownerId, sessionId);
+        verify(tokenRevocationService, never()).revokeAllForUser(any());
     }
 
 
@@ -788,13 +800,15 @@ class AuthServiceImplTest {
 
         InOrder order = inOrder(
                 userRepository,
-                refreshTokenRepository
+                refreshTokenRepository,
+                tokenRevocationService
         );
 
         order.verify(userRepository).findByUsername("dhito");
         order.verify(userRepository).incrementTokenVersion(userId);
         order.verify(refreshTokenRepository)
                 .revokeAllActiveByUserId(userId);
+        order.verify(tokenRevocationService).revokeAllForUser(userId);
     }
 
     @Test
@@ -845,6 +859,7 @@ class AuthServiceImplTest {
 
         verify(refreshTokenRepository, never())
                 .revokeAllActiveByUserId(any());
+        verifyNoInteractions(tokenRevocationService);
     }
 
 }

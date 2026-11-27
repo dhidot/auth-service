@@ -56,6 +56,7 @@ Aplikasi berjalan di port `8081`. Semua credential dibaca dari environment varia
 | `JWT_PRIVATE_KEY` | Ya | RSA private key (≥ 2048 bit, PKCS#8 PEM, atau PEM yang di-base64 dalam satu baris) untuk menandatangani token RS256. Kalau kosong, rusak, atau terlalu pendek, aplikasi **menolak start**. |
 | `JWT_SECRET` | Tidak (transisi) | Secret HS256 lama. **Hanya** dipakai untuk memeriksa token yang terbit sebelum pindah ke RS256, dan dihapus setelah masa transisi 7 hari (ADR 0001). Kalau di-set, minimal 32 byte. |
 | `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Ya | Akun admin bootstrap |
+| `REVOCATIONS_INTERNAL_API_KEY` | Tidak (sampai gateway memakainya) | Key untuk `GET /internal/revocations`, yang di-polling gateway untuk daftar token yang dicabut. Kosong berarti endpoint nonaktif (404). Kalau di-set, minimal 32 karakter. |
 | `NOTIFICATION_ENABLED` | Tidak | Default `false`. `true` untuk mengirim email verifikasi lewat Notification Service |
 | `NOTIFICATION_SERVICE_URL` | Tidak | Default `http://localhost:8082` |
 | `NOTIFICATION_INTERNAL_API_KEY` | Jika notifikasi aktif | Key internal ke Notification Service |
@@ -129,6 +130,7 @@ Compose menolak start kalau salah satu variable wajib belum diisi.
 | POST | `/api/auth/logout` | Access token + refresh token di body |
 | POST | `/api/auth/logout-all` | Access token |
 | GET | `/.well-known/jwks.json` | Publik, tapi **hanya jaringan internal** (public key untuk verifikasi token) |
+| GET | `/internal/revocations` | **Hanya jaringan internal**, header `X-Internal-Api-Key`. Daftar pencabutan token yang masih aktif (logout per sesi dan logout-all per user). |
 | GET | `/actuator/health` | Publik (liveness/readiness) |
 
 Swagger UI tersedia di `/swagger-ui.html` saat aplikasi berjalan.
