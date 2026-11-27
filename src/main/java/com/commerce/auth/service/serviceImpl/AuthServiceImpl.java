@@ -31,6 +31,7 @@ import com.commerce.auth.security.jwt.JwtService;
 import com.commerce.auth.service.AuthService;
 import com.commerce.auth.service.EmailVerificationService;
 import com.commerce.auth.service.RefreshTokenService;
+import com.commerce.auth.service.TokenRevocationService;
 import com.commerce.auth.utils.EmailNormalizer;
 import com.commerce.auth.utils.RequestUtils;
 import com.commerce.auth.utils.TokenHasher;
@@ -60,6 +61,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final EmailVerificationService emailVerificationService;
     private final ApplicationEventPublisher eventPublisher;
+    private final TokenRevocationService tokenRevocationService;
 
 
     private void validateRegisterRequest(
@@ -327,6 +329,12 @@ public class AuthServiceImpl implements AuthService {
 
         // 3. Revoke refresh token
         refreshTokenService.revoke(storedToken);
+
+        // 4. Revoke the session's access tokens everywhere (ADR 0001 C2)
+        tokenRevocationService.revokeSession(
+                storedToken.getUser().getId(),
+                storedToken.getSessionId()
+        );
     }
 
 
@@ -358,6 +366,9 @@ public class AuthServiceImpl implements AuthService {
 
         // 3. Revoke persisted refresh tokens
         refreshTokenRepository.revokeAllActiveByUserId(userId);
+
+        // 4. Revoke every access token of the user everywhere (ADR 0001 C2)
+        tokenRevocationService.revokeAllForUser(userId);
     }
 
 

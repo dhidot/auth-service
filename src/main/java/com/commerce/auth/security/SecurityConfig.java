@@ -54,6 +54,14 @@ public class SecurityConfig {
                                 "/.well-known/jwks.json"
                         ).permitAll()
 
+                        // Internal revocation snapshot for the gateway.
+                        // Protected by X-Internal-Api-Key in the controller;
+                        // not routed by Caddy or the gateway.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/internal/revocations"
+                        ).permitAll()
+
                         // Public authentication endpoints
                         .requestMatchers(
                                 "/api/auth/login",

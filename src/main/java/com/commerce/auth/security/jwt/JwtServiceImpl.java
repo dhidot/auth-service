@@ -185,6 +185,19 @@ public class JwtServiceImpl implements JwtService {
         return extractAllClaims(token).getSubject();
     }
 
+    @Override
+    public java.util.Optional<UUID> extractSessionId(String token) {
+        String sid = extractAllClaims(token).get(CLAIM_SESSION, String.class);
+        if (sid == null) {
+            return java.util.Optional.empty();
+        }
+        try {
+            return java.util.Optional.of(UUID.fromString(sid));
+        } catch (IllegalArgumentException e) {
+            throw new io.jsonwebtoken.MalformedJwtException("Invalid sid claim");
+        }
+    }
+
     /**
      * Subject matches the user: UUID for current tokens; username only
      * for legacy tokens (no {@code iss}), which never carry a UUID sub.

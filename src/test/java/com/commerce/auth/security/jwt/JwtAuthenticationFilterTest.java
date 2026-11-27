@@ -11,6 +11,7 @@ import com.commerce.auth.config.enums.AccountStatus;
 import com.commerce.auth.entity.User;
 import com.commerce.auth.security.CustomUserDetailsService;
 import com.commerce.auth.security.UserPrincipal;
+import com.commerce.auth.service.TokenRevocationService;
 
 import io.jsonwebtoken.MalformedJwtException;
 
@@ -42,6 +43,9 @@ class JwtAuthenticationFilterTest {
 
     @Mock
     private CustomUserDetailsService userDetailsService;
+
+    @Mock
+    private TokenRevocationService tokenRevocationService;
 
     @InjectMocks
     private JwtAuthenticationFilter jwtAuthenticationFilter;
