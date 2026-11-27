@@ -46,21 +46,97 @@ Untuk menjalankan melalui Docker:
 
 ## Konfigurasi
 
-Aplikasi menggunakan port `8081` secara default.
+Aplikasi berjalan di port `8081`. Semua credential dibaca dari environment variable; jangan menulis nilainya di `application.properties`.
 
-| Konfigurasi | Environment property | Default/lokasi |
+| Variable | Wajib | Keterangan |
 |---|---|---|
-| URL database | `DB_URL` | `jdbc:postgresql://localhost:5433/auth_db` |
-| Username admin | `ADMIN_USERNAME` | wajib diisi |
-| Email admin | `ADMIN_EMAIL` | wajib diisi |
-| Password admin | `ADMIN_PASSWORD` | wajib diisi |
-| Secret JWT | `JWT_SECRET` | didukung oleh Compose; aplikasi juga memiliki secret bawaan untuk development |
-| Database Compose | `DB_USERNAME` | wajib diisi melalui `.env` |
-| Password database Compose | `DB_PASSWORD` | wajib diisi melalui `.env` |
+| `DB_URL` | Tidak | Default `jdbc:postgresql://localhost:15433/auth_db` (port Postgres dari `compose.yaml`) |
+| `DB_USERNAME` | Ya | User database |
+| `DB_PASSWORD` | Ya | Password database |
+| `JWT_SECRET` | Ya | Minimal 32 byte (256 bit) untuk HS256. Kalau kosong, masih berupa placeholder, atau terlalu pendek, aplikasi **menolak start** |
+| `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Ya | Akun admin bootstrap |
+| `NOTIFICATION_ENABLED` | Tidak | Default `false`. `true` untuk mengirim email verifikasi lewat Notification Service |
+| `NOTIFICATION_SERVICE_URL` | Tidak | Default `http://localhost:8082` |
+| `NOTIFICATION_INTERNAL_API_KEY` | Jika notifikasi aktif | Key internal ke Notification Service |
+| `VERIFICATION_PAGE_URL` | Tidak | Default `http://localhost:3000/verify-email` |
 
-> Konfigurasi database dan admin dapat disediakan sebagai environment variable sehingga tidak perlu mengubah source code.
+Buat secret JWT yang aman:
+
+```bash
+openssl rand -base64 48
+```
+
+Spring Boot juga membaca environment variable lewat *relaxed binding*: `JWT_SECRET` otomatis menjadi property `jwt.secret`.
+
+## Menjalankan secara lokal (IntelliJ / Maven)
+
+1. Jalankan PostgreSQL, misalnya hanya service database dari Compose:
+   ```bash
+   docker compose up -d postgres
+   ```
+2. Isi environment variable di **Run → Edit Configurations → Environment variables** (IntelliJ), atau export di terminal:
+   ```bash
+   export DB_USERNAME=careertrack
+   export DB_PASSWORD=<password-db>
+   export JWT_SECRET=<hasil-openssl>
+   export ADMIN_USERNAME=admin ADMIN_EMAIL=admin@example.test ADMIN_PASSWORD=<password-admin>
+   ./mvnw spring-boot:run
+   ```
+3. Cek: `curl http://localhost:8081/actuator/health` harus membalas `200`.
 
 ## Menjalankan dengan Docker Compose
 
-Buat file `.env` pada root project:
+Buat file `.env` di root project (sudah masuk `.gitignore`, jangan di-commit):
 
+```dotenv
+DB_USERNAME=careertrack
+DB_PASSWORD=<password-db>
+JWT_SECRET=<hasil-openssl>
+ADMIN_USERNAME=admin
+ADMIN_EMAIL=admin@example.test
+ADMIN_PASSWORD=<password-admin>
+```
+
+Lalu jalankan:
+
+```bash
+docker compose up -d --build
+```
+
+| Service | Alamat dari laptop |
+|---|---|
+| Auth Service | `http://127.0.0.1:18081` |
+| PostgreSQL | `127.0.0.1:15433` |
+
+Compose menolak start kalau salah satu variable wajib belum diisi.
+
+## Endpoint
+
+| Method | Path | Akses |
+|---|---|---|
+| POST | `/api/auth/register` | Publik |
+| POST | `/api/auth/verify-email` | Publik |
+| POST | `/api/auth/login` | Publik (akun aktif dan terverifikasi) |
+| POST | `/api/auth/refresh` | Refresh token valid |
+| GET | `/api/auth/me` | Access token |
+| POST | `/api/auth/logout` | Access token + refresh token di body |
+| POST | `/api/auth/logout-all` | Access token |
+| GET | `/actuator/health` | Publik (liveness/readiness) |
+
+Swagger UI tersedia di `/swagger-ui.html` saat aplikasi berjalan.
+
+## Testing
+
+Integration test memakai Testcontainers, jadi Docker harus berjalan. `JWT_SECRET` juga wajib di-set:
+
+```bash
+JWT_SECRET=$(openssl rand -hex 32) ./mvnw test
+```
+
+## CI/CD
+
+Workflow `.github/workflows/auth-image.yml`:
+
+- **Pull request ke `main`:** menjalankan test.
+- **Push ke `main`:** test, lalu build dan publish image `linux/amd64` ke GHCR dengan tag commit SHA dan `production`. Server EC2 mengambil tag `production` lewat timer systemd.
+- **Manual:** tab **Actions → Auth Service CI and Image → Run workflow** (`workflow_dispatch`) untuk build ulang tanpa commit baru.
