@@ -169,12 +169,16 @@ public class AuthServiceImpl implements AuthService {
             );
         }
 
+        // New login = new session (JWT sid), shared by the access and
+        // refresh token and kept across refresh-token rotation.
+        UUID sessionId = UUID.randomUUID();
+
         String accessToken =
-                jwtService.generateAccessToken(user);
+                jwtService.generateAccessToken(user, sessionId);
 
 
         String refreshToken =
-                jwtService.generateRefreshToken(user);
+                jwtService.generateRefreshToken(user, sessionId);
 
 
         String deviceInfo =
@@ -188,6 +192,7 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenService.create(
                 user,
                 refreshToken,
+                sessionId,
                 deviceInfo,
                 ipAddress
         );
@@ -252,12 +257,17 @@ public class AuthServiceImpl implements AuthService {
         // 7. Revoke token lama
         refreshTokenService.revoke(storedToken);
 
-        // 8. Generate access dan refresh token baru
+        // 8. Generate access dan refresh token baru untuk sesi yang sama.
+        // Token lama (sebelum ADR 0001) belum punya sesi: buat yang baru.
+        UUID sessionId = storedToken.getSessionId() != null
+                ? storedToken.getSessionId()
+                : UUID.randomUUID();
+
         String newAccessToken =
-                jwtService.generateAccessToken(user);
+                jwtService.generateAccessToken(user, sessionId);
 
         String newRefreshToken =
-                jwtService.generateRefreshToken(user);
+                jwtService.generateRefreshToken(user, sessionId);
 
         // 9. Ambil informasi request
         String deviceInfo =
@@ -270,6 +280,7 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenService.create(
                 user,
                 newRefreshToken,
+                sessionId,
                 deviceInfo,
                 ipAddress
         );

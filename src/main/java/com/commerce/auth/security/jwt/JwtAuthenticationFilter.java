@@ -57,15 +57,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
 
-            String username = jwtService.extractUsername(token);
+            String subject = jwtService.extractSubject(token);
 
-            if (username != null
+            if (subject != null
                     && SecurityContextHolder.getContext()
                     .getAuthentication() == null) {
 
                 UserPrincipal principal =
                         (UserPrincipal) userDetailsService
-                                .loadUserByUsername(username);
+                                .loadUserBySubject(subject);
 
                 boolean accountActive =
                         principal.getUser().isAccountActive();

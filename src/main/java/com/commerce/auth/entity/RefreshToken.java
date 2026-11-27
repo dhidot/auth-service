@@ -47,5 +47,13 @@ public class RefreshToken extends BaseEntity {
 
     private LocalDateTime lastUsedAt;
 
+    /**
+     * Login session this token belongs to (JWT {@code sid}). Stays the
+     * same across refresh-token rotation. Null for tokens created before
+     * ADR 0001.
+     */
+    @Column(name = "session_id")
+    private UUID sessionId;
+
 
 }

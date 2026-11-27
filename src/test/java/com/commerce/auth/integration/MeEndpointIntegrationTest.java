@@ -448,7 +448,10 @@ class MeEndpointIntegrationTest {
                 .toString()
                 .replace("-", "");
 
+        // Validly signed token whose subject (a random UUID) is not in
+        // the database, e.g. a deleted account.
         User neverPersisted = User.builder()
+                .id(UUID.randomUUID())
                 .username(
                         "ghost" + suffix.substring(0, 12)
                 )
@@ -507,5 +510,121 @@ class MeEndpointIntegrationTest {
                 .andExpect(
                         jsonPath("$.data.tokenVersion").doesNotExist()
                 );
+    }
+
+    // =========================================================
+    // ADR 0001: RS256 tokens, JWKS, sessions, transition
+    // =========================================================
+
+    private String[] login(User user) throws Exception {
+        String body = mockMvc.perform(
+                        post("/api/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"email\":\"" + user.getEmail()
+                                        + "\",\"password\":\"TestPassword123!\"}")
+                )
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        return new String[]{
+                com.jayway.jsonpath.JsonPath.read(body, "$.data.accessToken"),
+                com.jayway.jsonpath.JsonPath.read(body, "$.data.refreshToken")
+        };
+    }
+
+    private java.security.PublicKey publicKeyFromJwks() throws Exception {
+        String jwks = mockMvc.perform(get("/.well-known/jwks.json"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("max-age")))
+                .andExpect(jsonPath("$.keys[0].kty").value("RSA"))
+                .andExpect(jsonPath("$.keys[0].alg").value("RS256"))
+                .andExpect(jsonPath("$.keys[0].use").value("sig"))
+                .andExpect(jsonPath("$.keys[0].kid").isNotEmpty())
+                .andExpect(jsonPath("$.keys[0].d").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+
+        return (java.security.PublicKey) io.jsonwebtoken.security.Jwks.setParser()
+                .build()
+                .parse(jwks)
+                .getKeys()
+                .iterator().next()
+                .toKey();
+    }
+
+    @Test
+    void jwksIsPublicAndVerifiesTokensIssuedByLogin() throws Exception {
+        User user = createUser(RoleName.USER);
+        String accessToken = login(user)[0];
+
+        // Verified with the published public key only.
+        var jws = Jwts.parser()
+                .verifyWith(publicKeyFromJwks())
+                .requireIssuer("careertrack-auth")
+                .requireAudience("careertrack-api")
+                .build()
+                .parseSignedClaims(accessToken);
+
+        org.junit.jupiter.api.Assertions.assertEquals("RS256", jws.getHeader().getAlgorithm());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                user.getId().toString(), jws.getPayload().getSubject());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                user.getUsername(), jws.getPayload().get("username", String.class));
+        org.junit.jupiter.api.Assertions.assertNotNull(jws.getPayload().get("sid", String.class));
+    }
+
+    @Test
+    void loginTokenWorksOnMe() throws Exception {
+        User user = createUser(RoleName.USER);
+
+        mockMvc.perform(get("/api/auth/me").header("Authorization", bearer(login(user)[0])))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(user.getId().toString()));
+    }
+
+    @Test
+    void refreshKeepsTheSameSessionAndStoresIt() throws Exception {
+        User user = createUser(RoleName.USER);
+        String[] tokens = login(user);
+        String sid = jwtService.extractAllClaims(tokens[0]).get("sid", String.class);
+
+        String body = mockMvc.perform(
+                        post("/api/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"refreshToken\":\"" + tokens[1] + "\"}")
+                )
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String newAccess = com.jayway.jsonpath.JsonPath.read(body, "$.data.accessToken");
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                sid, jwtService.extractAllClaims(newAccess).get("sid", String.class));
+
+        Integer rowsInSession = jdbcTemplate.queryForObject(
+                "select count(*) from refresh_tokens where session_id = ?::uuid",
+                Integer.class, sid);
+        org.junit.jupiter.api.Assertions.assertEquals(2, rowsInSession,
+                "original and rotated refresh token share the session");
+    }
+
+    @Test
+    void legacyHs256TokenStillWorksDuringTransition() throws Exception {
+        User user = createUser(RoleName.USER);
+
+        // Exactly what the previous Auth version issued.
+        String legacy = Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(user.getUsername())
+                .claim("type", "ACCESS")
+                .claim("tokenVersion", 0)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 900_000))
+                .signWith(Keys.hmacShaKeyFor(
+                        jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8)))
+                .compact();
+
+        mockMvc.perform(get("/api/auth/me").header("Authorization", bearer(legacy)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value(user.getUsername()));
     }
 }

@@ -10,14 +10,27 @@ Version 1.0
 import com.commerce.auth.entity.RefreshToken;
 import com.commerce.auth.entity.User;
 
+import java.util.UUID;
+
 public interface RefreshTokenService {
 
     RefreshToken create(
             User user,
             String refreshToken,
+            UUID sessionId,
             String deviceInfo,
             String ipAddress
     );
+
+    /** Without a session id (tokens created outside a login flow, e.g. tests). */
+    default RefreshToken create(
+            User user,
+            String refreshToken,
+            String deviceInfo,
+            String ipAddress
+    ) {
+        return create(user, refreshToken, null, deviceInfo, ipAddress);
+    }
 
     RefreshToken validate(
             String refreshToken
