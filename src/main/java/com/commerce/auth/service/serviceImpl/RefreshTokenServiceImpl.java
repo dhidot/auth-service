@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +35,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     public RefreshToken create(
             User user,
             String refreshToken,
+            UUID sessionId,
             String deviceInfo,
             String ipAddress
     ) {
@@ -50,6 +52,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 .revoked(false)
                 .deviceInfo(deviceInfo)
                 .ipAddress(ipAddress)
+                .sessionId(sessionId)
                 .build();
 
         return repository.save(entity);

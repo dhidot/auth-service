@@ -81,10 +81,10 @@ class JwtAuthenticationFilterTest {
         User user = activeUser();
         UserPrincipal principal = mock(UserPrincipal.class);
 
-        when(jwtService.extractUsername(ACCESS_TOKEN))
+        when(jwtService.extractSubject(ACCESS_TOKEN))
                 .thenReturn("dhito");
 
-        when(userDetailsService.loadUserByUsername("dhito"))
+        when(userDetailsService.loadUserBySubject("dhito"))
                 .thenReturn(principal);
 
         when(principal.getUser()).thenReturn(user);
@@ -121,10 +121,10 @@ class JwtAuthenticationFilterTest {
 
         UserPrincipal principal = mock(UserPrincipal.class);
 
-        when(jwtService.extractUsername(ACCESS_TOKEN))
+        when(jwtService.extractSubject(ACCESS_TOKEN))
                 .thenReturn("dhito");
 
-        when(userDetailsService.loadUserByUsername("dhito"))
+        when(userDetailsService.loadUserBySubject("dhito"))
                 .thenReturn(principal);
 
         when(principal.getUser()).thenReturn(user);
@@ -150,7 +150,7 @@ class JwtAuthenticationFilterTest {
     void filter_whenJwtMalformed_shouldNotAuthenticate()
             throws Exception {
 
-        when(jwtService.extractUsername(ACCESS_TOKEN))
+        when(jwtService.extractSubject(ACCESS_TOKEN))
                 .thenThrow(
                         new MalformedJwtException("Invalid JWT")
                 );

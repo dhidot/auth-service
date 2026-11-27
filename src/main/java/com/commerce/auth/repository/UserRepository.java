@@ -29,6 +29,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     })
     Optional<User> findByUsername(String username);
 
+    @EntityGraph(attributePaths = {
+            "roles",
+            "roles.permissions"
+    })
+    Optional<User> findWithAuthoritiesById(UUID id);
+
     boolean existsByEmail(String email);
 
     boolean existsByUsername(String username);

@@ -28,7 +28,9 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/auth_db
       DB_USERNAME: ${DB_USERNAME:?DB_USERNAME belum diisi}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD belum diisi}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET belum diisi}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?JWT_PRIVATE_KEY belum diisi}
+      # Legacy HS256, hanya selama masa transisi (ADR 0001)
+      JWT_SECRET: ${JWT_SECRET:-}
       ADMIN_USERNAME: ${ADMIN_USERNAME:?ADMIN_USERNAME belum diisi}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL belum diisi}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD belum diisi}

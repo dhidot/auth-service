@@ -451,10 +451,10 @@ class AuthControllerTest {
 
         UserPrincipal principal = new UserPrincipal(user);
 
-        when(jwtService.extractUsername(accessToken))
+        when(jwtService.extractSubject(accessToken))
                 .thenReturn("dhito");
 
-        when(customUserDetailsService.loadUserByUsername("dhito"))
+        when(customUserDetailsService.loadUserBySubject("dhito"))
                 .thenReturn(principal);
 
         when(jwtService.isTokenValid(accessToken, user))
